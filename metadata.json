@@ -1,0 +1,6 @@
+{
+  "name": "StockX",
+  "description": "Track. Analyze. Learn. Invest. - Modern Stock Market Trading & Learning Platform with simulated portfolio, interactive charts, and fintech dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
