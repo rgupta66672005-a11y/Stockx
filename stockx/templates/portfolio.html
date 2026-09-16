@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portfolio - StockX</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">📈</span>
+        <span>StockX</span>
+        <span class="brand-badge">DEMO</span>
+      </div>
+
+      <ul class="sidebar-menu">
+        <li>
+          <a href="{{ url_for('dashboard') }}">
+            <span>📊</span> <span>Dashboard</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('dashboard') }}#markets">
+            <span>🌐</span> <span>Markets</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('portfolio') }}" class="active">
+            <span>💼</span> <span>Portfolio</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('watchlist') }}">
+            <span>⭐</span> <span>Watchlist</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('orders') }}">
+            <span>📑</span> <span>Orders</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('orders') }}#transactions">
+            <span>💳</span> <span>Transactions</span>
+          </a>
+        </li>
+        <li style="margin-top: auto;">
+          <a href="{{ url_for('logout') }}" style="color: var(--color-negative);">
+            <span>🚪</span> <span>Logout</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="user-avatar">
+            {{ session.get('user_name', 'DT')[:2] | upper }}
+          </div>
+          <div class="user-meta">
+            <div class="user-name">{{ session.get('user_name', 'Demo Trader') }}</div>
+            <div class="user-cash">Cash: ₹{{ "{:,.2f}".format(cash) }}</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+      <!-- Top Navbar -->
+      <nav class="top-navbar">
+        <div class="nav-left">
+          <button class="menu-toggle-btn" id="menuToggleBtn" aria-label="Toggle Navigation">☰</button>
+          <div class="search-container">
+            <span class="search-icon">🔍</span>
+            <input
+              type="text"
+              id="globalSearchInput"
+              class="search-input"
+              placeholder="Search stocks..."
+              autocomplete="off"
+            >
+            <div class="search-dropdown" id="searchDropdown"></div>
+          </div>
+        </div>
+
+        <div class="nav-right">
+          <div class="market-status-pill">
+            <span class="status-dot"></span>
+            <span>MARKET OPEN</span>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Content Body -->
+      <main class="content-body">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-messages">
+              {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                  <span>{{ message }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h1 style="font-size: 1.8rem; font-weight: 800; letter-spacing: -0.5px;">Your Portfolio</h1>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">Track invested capital, current valuations, and gains/losses</p>
+          </div>
+          <a href="{{ url_for('dashboard') }}#markets" class="btn btn-primary">
+            + Buy More Stocks
+          </a>
+        </div>
+
+        <!-- Portfolio Overview Summary Cards -->
+        <div class="grid-metrics">
+          <div class="card">
+            <div class="metric-label">Current Value</div>
+            <div class="metric-value">₹{{ "{:,.2f}".format(total_portfolio_value) }}</div>
+            <div class="metric-sub" style="color: var(--text-muted);">{{ holdings | length }} Active holdings</div>
+          </div>
+
+          <div class="card">
+            <div class="metric-label">Total Investment</div>
+            <div class="metric-value">₹{{ "{:,.2f}".format(total_invested) }}</div>
+            <div class="metric-sub" style="color: var(--text-muted);">Cost basis</div>
+          </div>
+
+          <div class="card">
+            <div class="metric-label">Total Profit / Loss</div>
+            <div class="metric-value {{ 'text-positive' if total_pnl >= 0 else 'text-negative' }}">
+              {{ '+' if total_pnl >= 0 else '' }}₹{{ "{:,.2f}".format(total_pnl) }}
+            </div>
+            <div class="metric-sub {{ 'text-positive' if total_pnl >= 0 else 'text-negative' }}">
+              {{ '+' if total_pnl >= 0 else '' }}{{ "{:,.2f}".format(total_pnl_percent) }}% overall return
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="metric-label">Available Cash</div>
+            <div class="metric-value" style="color: var(--accent-lime);">₹{{ "{:,.2f}".format(cash) }}</div>
+            <div class="metric-sub" style="color: var(--text-muted);">Ready to deploy</div>
+          </div>
+        </div>
+
+        <!-- Portfolio Allocation Graph -->
+        {% if holdings %}
+          <div class="card" style="margin-bottom: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <h3 style="font-size: 1.1rem; font-weight: 700;">Portfolio Allocation by Stock</h3>
+              <span style="font-size: 0.8rem; color: var(--text-muted);">Weighted by Current Value</span>
+            </div>
+            <div style="height: 280px; position: relative;">
+              <canvas id="portfolioChart"></canvas>
+            </div>
+          </div>
+        {% endif %}
+
+        <!-- Holdings Table -->
+        <div class="card">
+          <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 16px;">Holdings Breakdown</h3>
+          {% if holdings %}
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Stock</th>
+                    <th>Quantity</th>
+                    <th>Average Price</th>
+                    <th>Current Price</th>
+                    <th>Investment</th>
+                    <th>Current Value</th>
+                    <th>Profit/Loss</th>
+                    <th style="text-align: right;">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for h in holdings %}
+                    {% set is_pnl_pos = h.pnl >= 0 %}
+                    <tr>
+                      <td>
+                        <a href="{{ url_for('stock_detail', symbol=h.symbol) }}" style="font-weight: 800; color: var(--text-primary);">
+                          {{ h.symbol }}
+                        </a>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">{{ h.company_name }}</div>
+                      </td>
+                      <td style="font-weight: 700;">{{ h.quantity }}</td>
+                      <td>₹{{ "{:,.2f}".format(h.avg_price) }}</td>
+                      <td style="font-weight: 700;">₹{{ "{:,.2f}".format(h.current_price) }}</td>
+                      <td>₹{{ "{:,.2f}".format(h.investment) }}</td>
+                      <td style="font-weight: 700;">₹{{ "{:,.2f}".format(h.current_value) }}</td>
+                      <td class="{{ 'text-positive' if is_pnl_pos else 'text-negative' }}" style="font-weight: 700;">
+                        {{ '+' if is_pnl_pos else '' }}₹{{ "{:,.2f}".format(h.pnl) }}
+                        <div style="font-size: 0.75rem;">({{ '+' if is_pnl_pos else '' }}{{ "{:,.2f}".format(h.pnl_percent) }}%)</div>
+                      </td>
+                      <td style="text-align: right;">
+                        <div style="display: inline-flex; gap: 6px;">
+                          <button
+                            class="btn btn-sm btn-buy"
+                            onclick="openTradeModal('{{ h.symbol }}', {{ h.current_price }}, 'BUY', {{ cash }}, {{ h.quantity }})"
+                          >
+                            Buy
+                          </button>
+                          <button
+                            class="btn btn-sm btn-sell"
+                            onclick="openTradeModal('{{ h.symbol }}', {{ h.current_price }}, 'SELL', {{ cash }}, {{ h.quantity }})"
+                          >
+                            Sell
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div style="text-align: center; padding: 48px 16px; color: var(--text-muted);">
+              <div style="font-size: 2rem; margin-bottom: 12px;">📂</div>
+              <h3>Your portfolio is currently empty</h3>
+              <p style="font-size: 0.9rem; margin-top: 6px; margin-bottom: 20px;">Use your ₹{{ "{:,.2f}".format(cash) }} demo cash to buy stocks.</p>
+              <a href="{{ url_for('dashboard') }}#markets" class="btn btn-primary">Explore Stocks</a>
+            </div>
+          {% endif %}
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Trade Modal -->
+  <div class="modal-backdrop" id="tradeModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="tradeModalTitle">Trade Stock</h3>
+        <button class="modal-close" onclick="closeTradeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="tradeErrorText" class="alert alert-error" style="display: none; margin-bottom: 14px;"></div>
+
+        <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
+          <div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">STOCK</div>
+            <div style="font-weight: 800; font-size: 1.2rem;" id="tradeModalStock">--</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.8rem; color: var(--text-muted);">PRICE</div>
+            <div style="font-weight: 800; font-size: 1.2rem; color: var(--accent-lime);" id="tradeModalPrice">₹0.00</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="tradeQuantityInput">Quantity</label>
+          <input
+            type="number"
+            id="tradeQuantityInput"
+            class="form-control"
+            min="1"
+            value="1"
+            oninput="updateTradeCalculation()"
+          >
+        </div>
+
+        <div class="calc-summary">
+          <div class="calc-row">
+            <span>Calculation</span>
+            <span>Price &times; Quantity</span>
+          </div>
+          <div class="calc-row total">
+            <span>Total Amount</span>
+            <span id="tradeTotalAmount" style="color: var(--accent-lime);">₹0.00</span>
+          </div>
+          <div class="calc-row" style="margin-top: 6px; font-size: 0.78rem;">
+            <span id="tradeBalanceStatus" style="color: var(--text-muted);"></span>
+          </div>
+        </div>
+
+        <button type="button" id="tradeSubmitBtn" class="btn btn-buy" onclick="submitTrade()">
+          Confirm Order
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  {% if holdings %}
+    <script>
+      const ctx = document.getElementById('portfolioChart').getContext('2d');
+      const symbols = {{ holdings | map(attribute='symbol') | list | tojson }};
+      const values = {{ holdings | map(attribute='current_value') | list | tojson }};
+
+      const backgroundColors = [
+        '#c9f23e', '#3fb950', '#58a6ff', '#bc8cff',
+        '#f0883e', '#f85149', '#39d353', '#7ee787'
+      ];
+
+      new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: symbols,
+          datasets: [{
+            data: values,
+            backgroundColor: backgroundColors.slice(0, symbols.length),
+            borderColor: '#161b22',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: {
+                color: '#f0f6fc',
+                font: { size: 12, weight: 'bold' },
+                padding: 16
+              }
+            },
+            tooltip: {
+              backgroundColor: '#161b22',
+              borderColor: '#30363d',
+              borderWidth: 1,
+              callbacks: {
+                label: (ctx) => ` ${ctx.label}: ₹${ctx.parsed.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+              }
+            }
+          },
+          cutout: '65%'
+        }
+      });
+    </script>
+  {% endif %}
+</body>
+</html>

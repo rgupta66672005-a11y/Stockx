@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Watchlist - StockX</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">📈</span>
+        <span>StockX</span>
+        <span class="brand-badge">DEMO</span>
+      </div>
+
+      <ul class="sidebar-menu">
+        <li>
+          <a href="{{ url_for('dashboard') }}">
+            <span>📊</span> <span>Dashboard</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('dashboard') }}#markets">
+            <span>🌐</span> <span>Markets</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('portfolio') }}">
+            <span>💼</span> <span>Portfolio</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('watchlist') }}" class="active">
+            <span>⭐</span> <span>Watchlist</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('orders') }}">
+            <span>📑</span> <span>Orders</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('orders') }}#transactions">
+            <span>💳</span> <span>Transactions</span>
+          </a>
+        </li>
+        <li style="margin-top: auto;">
+          <a href="{{ url_for('logout') }}" style="color: var(--color-negative);">
+            <span>🚪</span> <span>Logout</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="user-avatar">
+            {{ session.get('user_name', 'DT')[:2] | upper }}
+          </div>
+          <div class="user-meta">
+            <div class="user-name">{{ session.get('user_name', 'Demo Trader') }}</div>
+            <div class="user-cash">Cash: ₹{{ "{:,.2f}".format(current_user.cash if current_user else 100000.0) }}</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+      <!-- Top Navbar -->
+      <nav class="top-navbar">
+        <div class="nav-left">
+          <button class="menu-toggle-btn" id="menuToggleBtn" aria-label="Toggle Navigation">☰</button>
+          <div class="search-container">
+            <span class="search-icon">🔍</span>
+            <input
+              type="text"
+              id="globalSearchInput"
+              class="search-input"
+              placeholder="Search stocks..."
+              autocomplete="off"
+            >
+            <div class="search-dropdown" id="searchDropdown"></div>
+          </div>
+        </div>
+
+        <div class="nav-right">
+          <div class="market-status-pill">
+            <span class="status-dot"></span>
+            <span>MARKET OPEN</span>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Content Body -->
+      <main class="content-body">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-messages">
+              {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                  <span>{{ message }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 14px;">
+          <div>
+            <h1 style="font-size: 1.8rem; font-weight: 800; letter-spacing: -0.5px;">Your Watchlist</h1>
+            <p style="color: var(--text-muted); font-size: 0.85rem;">Monitor key market tickers with mini charts and quick trade execution</p>
+          </div>
+
+          <!-- Add stock to watchlist selector -->
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <select id="addWatchlistSelect" class="form-control" style="width: auto; min-width: 180px; padding: 8px 12px; font-size: 0.85rem;">
+              <option value="">-- Add Stock to List --</option>
+              {% for s in all_stocks %}
+                <option value="{{ s.symbol }}">{{ s.symbol }} - {{ s.company_name }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="addSelectedToWatchlist()">Add</button>
+          </div>
+        </div>
+
+        <!-- Watchlist Table / Grid -->
+        <div class="card">
+          {% if watchlist_items %}
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Company</th>
+                    <th>Price</th>
+                    <th>Change %</th>
+                    <th>Mini Chart</th>
+                    <th style="text-align: right;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in watchlist_items %}
+                    {% set is_pos = item.change >= 0 %}
+                    <tr>
+                      <td>
+                        <a href="{{ url_for('stock_detail', symbol=item.symbol) }}" style="font-weight: 800; font-size: 1rem; color: var(--text-primary);">
+                          {{ item.symbol }}
+                        </a>
+                      </td>
+                      <td style="color: var(--text-secondary); font-size: 0.88rem;">{{ item.company_name }}</td>
+                      <td style="font-weight: 800;">₹{{ "{:,.2f}".format(item.price) }}</td>
+                      <td>
+                        <span class="badge {{ 'badge-positive' if is_pos else 'badge-negative' }}" style="font-size: 0.82rem;">
+                          {{ '+' if is_pos else '' }}{{ item.change_percent }}%
+                        </span>
+                      </td>
+                      <td style="width: 150px; padding: 8px 16px;">
+                        <div style="height: 38px; width: 120px;">
+                          <canvas id="sparkline_{{ item.symbol }}"></canvas>
+                        </div>
+                      </td>
+                      <td style="text-align: right;">
+                        <div style="display: inline-flex; gap: 8px; align-items: center;">
+                          <button
+                            class="btn btn-sm btn-buy"
+                            onclick="openTradeModal('{{ item.symbol }}', {{ item.price }}, 'BUY', {{ current_user.cash if current_user else 100000.0 }}, 0)"
+                          >
+                            Buy
+                          </button>
+                          <a href="{{ url_for('stock_detail', symbol=item.symbol) }}" class="btn btn-sm btn-secondary">
+                            View
+                          </a>
+                          <button
+                            class="btn btn-sm btn-secondary"
+                            style="color: var(--color-negative);"
+                            title="Remove from Watchlist"
+                            onclick="toggleWatchlist('{{ item.symbol }}', null)"
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div style="text-align: center; padding: 48px 16px; color: var(--text-muted);">
+              <div style="font-size: 2.2rem; margin-bottom: 12px;">⭐</div>
+              <h3>Your Watchlist is Empty</h3>
+              <p style="font-size: 0.9rem; margin-top: 6px; margin-bottom: 20px;">Select a stock from the dropdown above or browse markets to add stocks.</p>
+              <a href="{{ url_for('dashboard') }}#markets" class="btn btn-primary">Browse Markets</a>
+            </div>
+          {% endif %}
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Trade Modal -->
+  <div class="modal-backdrop" id="tradeModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="tradeModalTitle">Trade Stock</h3>
+        <button class="modal-close" onclick="closeTradeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="tradeErrorText" class="alert alert-error" style="display: none; margin-bottom: 14px;"></div>
+
+        <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
+          <div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">STOCK</div>
+            <div style="font-weight: 800; font-size: 1.2rem;" id="tradeModalStock">--</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.8rem; color: var(--text-muted);">PRICE</div>
+            <div style="font-weight: 800; font-size: 1.2rem; color: var(--accent-lime);" id="tradeModalPrice">₹0.00</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="tradeQuantityInput">Quantity</label>
+          <input
+            type="number"
+            id="tradeQuantityInput"
+            class="form-control"
+            min="1"
+            value="1"
+            oninput="updateTradeCalculation()"
+          >
+        </div>
+
+        <div class="calc-summary">
+          <div class="calc-row">
+            <span>Calculation</span>
+            <span>Price &times; Quantity</span>
+          </div>
+          <div class="calc-row total">
+            <span>Total Amount</span>
+            <span id="tradeTotalAmount" style="color: var(--accent-lime);">₹0.00</span>
+          </div>
+          <div class="calc-row" style="margin-top: 6px; font-size: 0.78rem;">
+            <span id="tradeBalanceStatus" style="color: var(--text-muted);"></span>
+          </div>
+        </div>
+
+        <button type="button" id="tradeSubmitBtn" class="btn btn-buy" onclick="submitTrade()">
+          Confirm Order
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script>
+    function addSelectedToWatchlist() {
+      const select = document.getElementById('addWatchlistSelect');
+      const symbol = select.value;
+      if (!symbol) return;
+      toggleWatchlist(symbol, null);
+    }
+
+    // Render mini sparkline charts for each watchlist item
+    {% for item in watchlist_items %}
+      (function() {
+        const canvas = document.getElementById('sparkline_{{ item.symbol }}');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const isPos = {{ 'true' if item.change >= 0 else 'false' }};
+        const color = isPos ? '#3fb950' : '#f85149';
+
+        const p = {{ item.price }};
+        const diff = {{ item.change }};
+        const base = p - diff;
+
+        // Sparkline curve data
+        const data = [base, base + diff*0.3, base + diff*0.1, base + diff*0.8, base + diff*0.6, p];
+
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: ['', '', '', '', '', ''],
+            datasets: [{
+              data: data,
+              borderColor: color,
+              borderWidth: 1.8,
+              fill: false,
+              tension: 0.3,
+              pointRadius: 0
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            scales: {
+              x: { display: false },
+              y: { display: false }
+            }
+          }
+        });
+      })();
+    {% endfor %}
+  </script>
+</body>
+</html>

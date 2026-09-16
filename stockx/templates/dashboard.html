@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - StockX</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">📈</span>
+        <span>StockX</span>
+        <span class="brand-badge">DEMO</span>
+      </div>
+
+      <ul class="sidebar-menu">
+        <li>
+          <a href="{{ url_for('dashboard') }}" class="active">
+            <span>📊</span> <span>Dashboard</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('dashboard') }}#markets">
+            <span>🌐</span> <span>Markets</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('portfolio') }}">
+            <span>💼</span> <span>Portfolio</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('watchlist') }}">
+            <span>⭐</span> <span>Watchlist</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('orders') }}">
+            <span>📑</span> <span>Orders</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('orders') }}#transactions">
+            <span>💳</span> <span>Transactions</span>
+          </a>
+        </li>
+        <li style="margin-top: auto;">
+          <a href="{{ url_for('logout') }}" style="color: var(--color-negative);">
+            <span>🚪</span> <span>Logout</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="user-avatar">
+            {{ session.get('user_name', 'DT')[:2] | upper }}
+          </div>
+          <div class="user-meta">
+            <div class="user-name">{{ session.get('user_name', 'Demo Trader') }}</div>
+            <div class="user-cash">Cash: ₹{{ "{:,.2f}".format(cash) }}</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+      <!-- Top Navbar -->
+      <nav class="top-navbar">
+        <div class="nav-left">
+          <button class="menu-toggle-btn" id="menuToggleBtn" aria-label="Toggle Navigation">☰</button>
+          <div class="search-container">
+            <span class="search-icon">🔍</span>
+            <input
+              type="text"
+              id="globalSearchInput"
+              class="search-input"
+              placeholder="Search stocks (e.g. TCS, RELIANCE, INFY)..."
+              autocomplete="off"
+            >
+            <div class="search-dropdown" id="searchDropdown"></div>
+          </div>
+        </div>
+
+        <div class="nav-right">
+          <div class="market-status-pill">
+            <span class="status-dot"></span>
+            <span>MARKET OPEN (SIMULATED)</span>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Content Body -->
+      <main class="content-body">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-messages">
+              {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                  <span>{{ message }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        <!-- Simulated Market Banner -->
+        <div class="demo-banner">
+          <div class="demo-banner-text">
+            <span>⚡</span>
+            <span>DEMO / SIMULATED MARKET DATA</span>
+          </div>
+          <div style="font-size: 0.8rem; color: var(--text-muted);">
+            Virtual trading environment &bull; Trades executed instantly
+          </div>
+        </div>
+
+        <!-- Major Indian Market Indices -->
+        <div class="indices-bar">
+          <div class="index-card">
+            <div>
+              <div class="index-title">{{ indices.nifty.name }}</div>
+              <div class="index-price">₹{{ "{:,.2f}".format(indices.nifty.value) }}</div>
+            </div>
+            <div style="text-align: right;">
+              <div class="text-positive" style="font-weight: 700; font-size: 0.9rem;">+{{ indices.nifty.change }}</div>
+              <div class="badge badge-positive">+{{ indices.nifty.percent }}%</div>
+            </div>
+          </div>
+
+          <div class="index-card">
+            <div>
+              <div class="index-title">{{ indices.sensex.name }}</div>
+              <div class="index-price">₹{{ "{:,.2f}".format(indices.sensex.value) }}</div>
+            </div>
+            <div style="text-align: right;">
+              <div class="text-positive" style="font-weight: 700; font-size: 0.9rem;">+{{ indices.sensex.change }}</div>
+              <div class="badge badge-positive">+{{ indices.sensex.percent }}%</div>
+            </div>
+          </div>
+
+          <div class="index-card">
+            <div>
+              <div class="index-title">{{ indices.bank_nifty.name }}</div>
+              <div class="index-price">₹{{ "{:,.2f}".format(indices.bank_nifty.value) }}</div>
+            </div>
+            <div style="text-align: right;">
+              <div class="text-positive" style="font-weight: 700; font-size: 0.9rem;">+{{ indices.bank_nifty.change }}</div>
+              <div class="badge badge-positive">+{{ indices.bank_nifty.percent }}%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4 Key Portfolio Metrics -->
+        <div class="grid-metrics">
+          <div class="card">
+            <div class="metric-label">Portfolio Value</div>
+            <div class="metric-value">₹{{ "{:,.0f}".format(total_portfolio_value) }}</div>
+            <div class="metric-sub" style="color: var(--text-muted);">Invested: ₹{{ "{:,.0f}".format(total_invested) }}</div>
+          </div>
+
+          <div class="card">
+            <div class="metric-label">Today's Profit/Loss</div>
+            <div class="metric-value {{ 'text-positive' if today_pnl >= 0 else 'text-negative' }}">
+              {{ '+' if today_pnl >= 0 else '' }}₹{{ "{:,.0f}".format(today_pnl) }}
+            </div>
+            <div class="metric-sub {{ 'text-positive' if today_pnl >= 0 else 'text-negative' }}">
+              {{ '+' if today_pnl >= 0 else '' }}{{ "{:,.2f}".format((today_pnl / total_invested * 100) if total_invested > 0 else 0) }}% today
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="metric-label">Available Cash</div>
+            <div class="metric-value" style="color: var(--accent-lime);">₹{{ "{:,.0f}".format(cash) }}</div>
+            <div class="metric-sub" style="color: var(--text-muted);">Demo balance</div>
+          </div>
+
+          <div class="card">
+            <div class="metric-label">Total Stocks</div>
+            <div class="metric-value">{{ total_stocks_count }}</div>
+            <div class="metric-sub" style="color: var(--text-muted);">Active holdings</div>
+          </div>
+        </div>
+
+        <!-- Market Overview Chart & Mini Holdings -->
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px;">
+          <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <h3 style="font-size: 1.05rem; font-weight: 700;">NIFTY 50 Intraday Movement</h3>
+              <span class="badge badge-positive">Live Simulated Feed</span>
+            </div>
+            <div style="height: 240px; position: relative;">
+              <canvas id="marketTrendChart"></canvas>
+            </div>
+          </div>
+
+          <div class="card" style="display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+              <h3 style="font-size: 1.05rem; font-weight: 700;">Your Top Holdings</h3>
+              <a href="{{ url_for('portfolio') }}" style="font-size: 0.8rem; color: var(--accent-lime);">View All &rarr;</a>
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
+              {% for p in portfolio_rows[:4] %}
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: var(--bg-elevated); border-radius: var(--radius-md);">
+                  <div>
+                    <div style="font-weight: 700; font-size: 0.88rem;">{{ p.symbol }}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">{{ p.quantity }} shares</div>
+                  </div>
+                  <div style="text-align: right;">
+                    <div style="font-weight: 700; font-size: 0.88rem;">₹{{ "{:,.2f}".format(p.quantity * p.current_price) }}</div>
+                    <div class="{{ 'text-positive' if p.change >= 0 else 'text-negative' }}" style="font-size: 0.75rem; font-weight: 600;">
+                      {{ '+' if p.change >= 0 else '' }}{{ p.change_percent }}%
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <!-- All Demo Stocks Table -->
+        <div class="card" id="markets">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <h3 style="font-size: 1.15rem; font-weight: 800;">Market Equities (NSE Demo)</h3>
+              <p style="font-size: 0.82rem; color: var(--text-muted);">Real-time pricing for premier Indian bluechip stocks</p>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">
+              Showing {{ stocks | length }} stocks
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Company</th>
+                  <th>Price</th>
+                  <th>Change</th>
+                  <th>% Change</th>
+                  <th>Volume</th>
+                  <th>Market Cap</th>
+                  <th style="text-align: right;">Trade</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in stocks %}
+                  {% set is_pos = s.change >= 0 %}
+                  <tr>
+                    <td>
+                      <a href="{{ url_for('stock_detail', symbol=s.symbol) }}" style="font-weight: 800; color: var(--text-primary);">
+                        {{ s.symbol }}
+                      </a>
+                    </td>
+                    <td style="color: var(--text-secondary);">{{ s.company_name }}</td>
+                    <td style="font-weight: 700;">₹{{ "{:,.2f}".format(s.price) }}</td>
+                    <td class="{{ 'text-positive' if is_pos else 'text-negative' }}" style="font-weight: 600;">
+                      {{ '+' if is_pos else '' }}{{ "{:,.2f}".format(s.change) }}
+                    </td>
+                    <td>
+                      <span class="badge {{ 'badge-positive' if is_pos else 'badge-negative' }}">
+                        {{ '+' if is_pos else '' }}{{ s.change_percent }}%
+                      </span>
+                    </td>
+                    <td style="color: var(--text-muted); font-size: 0.82rem;">{{ s.volume }}</td>
+                    <td style="color: var(--text-muted); font-size: 0.82rem;">{{ s.market_cap }}</td>
+                    <td style="text-align: right;">
+                      <div style="display: inline-flex; gap: 6px;">
+                        <button
+                          class="btn btn-sm btn-buy"
+                          onclick="openTradeModal('{{ s.symbol }}', {{ s.price }}, 'BUY', {{ cash }}, 0)"
+                        >
+                          BUY
+                        </button>
+                        <a href="{{ url_for('stock_detail', symbol=s.symbol) }}" class="btn btn-sm btn-secondary">
+                          View
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Trade Modal -->
+  <div class="modal-backdrop" id="tradeModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="tradeModalTitle">Trade Stock</h3>
+        <button class="modal-close" onclick="closeTradeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="tradeErrorText" class="alert alert-error" style="display: none; margin-bottom: 14px;"></div>
+
+        <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
+          <div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">STOCK</div>
+            <div style="font-weight: 800; font-size: 1.2rem;" id="tradeModalStock">TCS</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.8rem; color: var(--text-muted);">PRICE</div>
+            <div style="font-weight: 800; font-size: 1.2rem; color: var(--accent-lime);" id="tradeModalPrice">₹0.00</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="tradeQuantityInput">Quantity</label>
+          <input
+            type="number"
+            id="tradeQuantityInput"
+            class="form-control"
+            min="1"
+            value="1"
+            oninput="updateTradeCalculation()"
+          >
+        </div>
+
+        <div class="calc-summary">
+          <div class="calc-row">
+            <span>Calculation</span>
+            <span>Price &times; Quantity</span>
+          </div>
+          <div class="calc-row total">
+            <span>Total Amount</span>
+            <span id="tradeTotalAmount" style="color: var(--accent-lime);">₹0.00</span>
+          </div>
+          <div class="calc-row" style="margin-top: 6px; font-size: 0.78rem;">
+            <span id="tradeBalanceStatus" style="color: var(--text-muted);"></span>
+          </div>
+        </div>
+
+        <button type="button" id="tradeSubmitBtn" class="btn btn-buy" onclick="submitTrade()">
+          Confirm Order
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script>
+    // Initialize NIFTY 50 Intraday Chart
+    const ctx = document.getElementById('marketTrendChart').getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 240);
+    gradient.addColorStop(0, 'rgba(63, 185, 80, 0.35)');
+    gradient.addColorStop(1, 'rgba(63, 185, 80, 0.0)');
+
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: ['9:15', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '15:30'],
+        datasets: [{
+          label: 'NIFTY 50',
+          data: [24685, 24720, 24710, 24790, 24765, 24810, 24835, 24850],
+          borderColor: '#3fb950',
+          backgroundColor: gradient,
+          borderWidth: 2,
+          fill: true,
+          tension: 0.35,
+          pointRadius: 2,
+          pointHoverRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#161b22',
+            borderColor: '#30363d',
+            borderWidth: 1,
+            titleColor: '#f0f6fc',
+            bodyColor: '#c9f23e',
+            displayColors: false,
+            callbacks: {
+              label: (ctx) => `₹${ctx.parsed.y.toLocaleString('en-IN')}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: { color: '#8b949e', font: { size: 10 } }
+          },
+          y: {
+            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: { color: '#8b949e', font: { size: 10 } }
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

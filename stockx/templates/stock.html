@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ stock.symbol }} - StockX</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">📈</span>
+        <span>StockX</span>
+        <span class="brand-badge">DEMO</span>
+      </div>
+
+      <ul class="sidebar-menu">
+        <li>
+          <a href="{{ url_for('dashboard') }}">
+            <span>📊</span> <span>Dashboard</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('dashboard') }}#markets">
+            <span>🌐</span> <span>Markets</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('portfolio') }}">
+            <span>💼</span> <span>Portfolio</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('watchlist') }}">
+            <span>⭐</span> <span>Watchlist</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('orders') }}">
+            <span>📑</span> <span>Orders</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('orders') }}#transactions">
+            <span>💳</span> <span>Transactions</span>
+          </a>
+        </li>
+        <li style="margin-top: auto;">
+          <a href="{{ url_for('logout') }}" style="color: var(--color-negative);">
+            <span>🚪</span> <span>Logout</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="user-avatar">
+            {{ session.get('user_name', 'DT')[:2] | upper }}
+          </div>
+          <div class="user-meta">
+            <div class="user-name">{{ session.get('user_name', 'Demo Trader') }}</div>
+            <div class="user-cash">Cash: ₹{{ "{:,.2f}".format(cash) }}</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+      <!-- Top Navbar -->
+      <nav class="top-navbar">
+        <div class="nav-left">
+          <button class="menu-toggle-btn" id="menuToggleBtn" aria-label="Toggle Navigation">☰</button>
+          <div class="search-container">
+            <span class="search-icon">🔍</span>
+            <input
+              type="text"
+              id="globalSearchInput"
+              class="search-input"
+              placeholder="Search stocks (e.g. TCS, RELIANCE, INFY)..."
+              autocomplete="off"
+            >
+            <div class="search-dropdown" id="searchDropdown"></div>
+          </div>
+        </div>
+
+        <div class="nav-right">
+          <div class="market-status-pill">
+            <span class="status-dot"></span>
+            <span>MARKET OPEN</span>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Content Body -->
+      <main class="content-body">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-messages">
+              {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                  <span>{{ message }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        <div style="margin-bottom: 16px;">
+          <a href="{{ url_for('dashboard') }}" style="font-size: 0.85rem; color: var(--text-muted);">&larr; Back to Dashboard</a>
+        </div>
+
+        <!-- Stock Header -->
+        {% set is_pos = stock.change >= 0 %}
+        {% set owned_qty = holding.quantity if holding else 0 %}
+        <div class="stock-detail-header">
+          <div>
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
+              <h1 style="font-size: 2.2rem; font-weight: 800; letter-spacing: -0.5px;">{{ stock.symbol }}</h1>
+              <span class="badge {{ 'badge-positive' if is_pos else 'badge-negative' }}" style="font-size: 0.85rem; padding: 4px 10px;">
+                {{ '+' if is_pos else '' }}{{ stock.change_percent }}%
+              </span>
+            </div>
+            <div style="color: var(--text-secondary); font-size: 1rem;">{{ stock.company_name }} &bull; NSE</div>
+          </div>
+
+          <div style="text-align: right;">
+            <div style="font-size: 2.2rem; font-weight: 800; color: var(--text-primary);">
+              ₹{{ "{:,.2f}".format(stock.price) }}
+            </div>
+            <div class="{{ 'text-positive' if is_pos else 'text-negative' }}" style="font-weight: 700; font-size: 0.95rem;">
+              {{ '+' if is_pos else '' }}₹{{ "{:,.2f}".format(stock.change) }} Today
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons Bar -->
+        <div style="display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap;">
+          <button
+            class="btn btn-buy"
+            style="min-width: 120px;"
+            onclick="openTradeModal('{{ stock.symbol }}', {{ stock.price }}, 'BUY', {{ cash }}, {{ owned_qty }})"
+          >
+            BUY
+          </button>
+          <button
+            class="btn btn-sell"
+            style="min-width: 120px;"
+            onclick="openTradeModal('{{ stock.symbol }}', {{ stock.price }}, 'SELL', {{ cash }}, {{ owned_qty }})"
+          >
+            SELL
+          </button>
+          <button
+            id="watchlistToggleBtn"
+            class="btn {{ 'btn-primary' if in_watchlist else 'btn-secondary' }}"
+            onclick="toggleWatchlist('{{ stock.symbol }}', this)"
+          >
+            {{ '★ In Watchlist' if in_watchlist else '☆ Add to Watchlist' }}
+          </button>
+        </div>
+
+        <!-- Interactive Chart.js Price Chart -->
+        <div class="stock-chart-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="font-size: 1.1rem; font-weight: 700;">Price History (Intraday)</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Simulated Live Data</span>
+          </div>
+          <div class="chart-container">
+            <canvas id="stockPriceChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Stock Statistics Grid -->
+        <div class="card" style="margin-bottom: 24px;">
+          <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 16px;">Market Summary</h3>
+          <div class="stock-stats-grid">
+            <div class="stat-box">
+              <div class="label">Open</div>
+              <div class="val">₹{{ "{:,.2f}".format(stock.open) }}</div>
+            </div>
+            <div class="stat-box">
+              <div class="label">Day High</div>
+              <div class="val">₹{{ "{:,.2f}".format(stock.high) }}</div>
+            </div>
+            <div class="stat-box">
+              <div class="label">Day Low</div>
+              <div class="val">₹{{ "{:,.2f}".format(stock.low) }}</div>
+            </div>
+            <div class="stat-box">
+              <div class="label">Prev. Close</div>
+              <div class="val">₹{{ "{:,.2f}".format(stock.prev_close) }}</div>
+            </div>
+            <div class="stat-box">
+              <div class="label">Volume</div>
+              <div class="val">{{ stock.volume }}</div>
+            </div>
+            <div class="stat-box">
+              <div class="label">Market Cap</div>
+              <div class="val">{{ stock.market_cap }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- User Holding Information -->
+        <div class="card">
+          <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 14px;">Your Position in {{ stock.symbol }}</h3>
+          {% if holding and holding.quantity > 0 %}
+            {% set inv = holding.quantity * holding.avg_price %}
+            {% set cur_val = holding.quantity * stock.price %}
+            {% set pnl = cur_val - inv %}
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;">
+              <div class="stat-box">
+                <div class="label">Shares Owned</div>
+                <div class="val" style="color: var(--accent-lime);">{{ holding.quantity }}</div>
+              </div>
+              <div class="stat-box">
+                <div class="label">Average Buy Price</div>
+                <div class="val">₹{{ "{:,.2f}".format(holding.avg_price) }}</div>
+              </div>
+              <div class="stat-box">
+                <div class="label">Total Investment</div>
+                <div class="val">₹{{ "{:,.2f}".format(inv) }}</div>
+              </div>
+              <div class="stat-box">
+                <div class="label">Current Value</div>
+                <div class="val">₹{{ "{:,.2f}".format(cur_val) }}</div>
+              </div>
+              <div class="stat-box">
+                <div class="label">Total Profit / Loss</div>
+                <div class="val {{ 'text-positive' if pnl >= 0 else 'text-negative' }}">
+                  {{ '+' if pnl >= 0 else '' }}₹{{ "{:,.2f}".format(pnl) }} ({{ '+' if pnl >= 0 else '' }}{{ "{:,.2f}".format(pnl / inv * 100) }}%)
+                </div>
+              </div>
+            </div>
+          {% else %}
+            <p style="color: var(--text-muted); font-size: 0.9rem;">
+              You do not currently own any shares of {{ stock.symbol }}. Click the <strong>BUY</strong> button above to add to your portfolio.
+            </p>
+          {% endif %}
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Trade Modal -->
+  <div class="modal-backdrop" id="tradeModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="tradeModalTitle">Trade Stock</h3>
+        <button class="modal-close" onclick="closeTradeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="tradeErrorText" class="alert alert-error" style="display: none; margin-bottom: 14px;"></div>
+
+        <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
+          <div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">STOCK</div>
+            <div style="font-weight: 800; font-size: 1.2rem;" id="tradeModalStock">{{ stock.symbol }}</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.8rem; color: var(--text-muted);">PRICE</div>
+            <div style="font-weight: 800; font-size: 1.2rem; color: var(--accent-lime);" id="tradeModalPrice">₹{{ stock.price }}</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="tradeQuantityInput">Quantity</label>
+          <input
+            type="number"
+            id="tradeQuantityInput"
+            class="form-control"
+            min="1"
+            value="1"
+            oninput="updateTradeCalculation()"
+          >
+        </div>
+
+        <div class="calc-summary">
+          <div class="calc-row">
+            <span>Calculation</span>
+            <span>Price &times; Quantity</span>
+          </div>
+          <div class="calc-row total">
+            <span>Total Amount</span>
+            <span id="tradeTotalAmount" style="color: var(--accent-lime);">₹0.00</span>
+          </div>
+          <div class="calc-row" style="margin-top: 6px; font-size: 0.78rem;">
+            <span id="tradeBalanceStatus" style="color: var(--text-muted);"></span>
+          </div>
+        </div>
+
+        <button type="button" id="tradeSubmitBtn" class="btn btn-buy" onclick="submitTrade()">
+          Confirm Order
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script>
+    // Initialize Stock Price Chart
+    const ctx = document.getElementById('stockPriceChart').getContext('2d');
+    const isPositive = {{ 'true' if stock.change >= 0 else 'false' }};
+    const chartColor = isPositive ? '#3fb950' : '#f85149';
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, 380);
+    gradient.addColorStop(0, isPositive ? 'rgba(63, 185, 80, 0.35)' : 'rgba(248, 81, 73, 0.35)');
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.0)');
+
+    const basePrice = {{ stock.open }};
+    const curPrice = {{ stock.price }};
+    const high = {{ stock.high }};
+    const low = {{ stock.low }};
+
+    // Realistic simulated intraday price curve
+    const p1 = basePrice;
+    const p2 = basePrice + (high - basePrice) * 0.4;
+    const p3 = low + (high - low) * 0.3;
+    const p4 = high * 0.98;
+    const p5 = low + (high - low) * 0.6;
+    const p6 = curPrice - (curPrice - basePrice) * 0.3;
+    const p7 = curPrice;
+
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: ['09:15', '10:15', '11:15', '12:15', '13:15', '14:15', '15:30'],
+        datasets: [{
+          label: '{{ stock.symbol }}',
+          data: [p1, p2, p3, p4, p5, p6, p7],
+          borderColor: chartColor,
+          backgroundColor: gradient,
+          borderWidth: 2.5,
+          fill: true,
+          tension: 0.35,
+          pointRadius: 3,
+          pointHoverRadius: 7
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#161b22',
+            borderColor: '#30363d',
+            borderWidth: 1,
+            titleColor: '#f0f6fc',
+            bodyColor: '#c9f23e',
+            displayColors: false,
+            callbacks: {
+              label: (c) => `₹${c.parsed.y.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: { color: '#8b949e', font: { size: 11 } }
+          },
+          y: {
+            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: {
+              color: '#8b949e',
+              font: { size: 11 },
+              callback: (v) => '₹' + v.toLocaleString('en-IN')
+            }
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

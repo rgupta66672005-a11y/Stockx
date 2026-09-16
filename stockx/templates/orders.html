@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orders & Transactions - StockX</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">📈</span>
+        <span>StockX</span>
+        <span class="brand-badge">DEMO</span>
+      </div>
+
+      <ul class="sidebar-menu">
+        <li>
+          <a href="{{ url_for('dashboard') }}">
+            <span>📊</span> <span>Dashboard</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('dashboard') }}#markets">
+            <span>🌐</span> <span>Markets</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('portfolio') }}">
+            <span>💼</span> <span>Portfolio</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('watchlist') }}">
+            <span>⭐</span> <span>Watchlist</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('orders') }}" class="active">
+            <span>📑</span> <span>Orders</span>
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('orders') }}#transactions">
+            <span>💳</span> <span>Transactions</span>
+          </a>
+        </li>
+        <li style="margin-top: auto;">
+          <a href="{{ url_for('logout') }}" style="color: var(--color-negative);">
+            <span>🚪</span> <span>Logout</span>
+          </a>
+        </li>
+      </ul>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="user-avatar">
+            {{ session.get('user_name', 'DT')[:2] | upper }}
+          </div>
+          <div class="user-meta">
+            <div class="user-name">{{ session.get('user_name', 'Demo Trader') }}</div>
+            <div class="user-cash">Cash: ₹{{ "{:,.2f}".format(current_user.cash if current_user else 100000.0) }}</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+      <!-- Top Navbar -->
+      <nav class="top-navbar">
+        <div class="nav-left">
+          <button class="menu-toggle-btn" id="menuToggleBtn" aria-label="Toggle Navigation">☰</button>
+          <div class="search-container">
+            <span class="search-icon">🔍</span>
+            <input
+              type="text"
+              id="globalSearchInput"
+              class="search-input"
+              placeholder="Search stocks..."
+              autocomplete="off"
+            >
+            <div class="search-dropdown" id="searchDropdown"></div>
+          </div>
+        </div>
+
+        <div class="nav-right">
+          <div class="market-status-pill">
+            <span class="status-dot"></span>
+            <span>MARKET OPEN</span>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Content Body -->
+      <main class="content-body">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-messages">
+              {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                  <span>{{ message }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        <div style="margin-bottom: 24px;">
+          <h1 style="font-size: 1.8rem; font-weight: 800; letter-spacing: -0.5px;">Order &amp; Transaction Book</h1>
+          <p style="color: var(--text-muted); font-size: 0.85rem;">Audit all executed buy/sell trades and cash ledger adjustments</p>
+        </div>
+
+        <!-- Orders Section -->
+        <div class="card" style="margin-bottom: 28px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="font-size: 1.15rem; font-weight: 700;">Executed Orders</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">{{ orders | length }} Total Orders</span>
+          </div>
+
+          {% if orders %}
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Order ID</th>
+                    <th>Stock</th>
+                    <th>BUY/SELL</th>
+                    <th>Quantity</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for o in orders %}
+                    <tr>
+                      <td style="font-family: monospace; font-weight: 600; color: var(--text-secondary);">
+                        {{ o.order_id }}
+                      </td>
+                      <td>
+                        <a href="{{ url_for('stock_detail', symbol=o.symbol) }}" style="font-weight: 700; color: var(--text-primary);">
+                          {{ o.symbol }}
+                        </a>
+                      </td>
+                      <td>
+                        <span class="badge {{ 'badge-buy' if o.order_type == 'BUY' else 'badge-sell' }}">
+                          {{ o.order_type }}
+                        </span>
+                      </td>
+                      <td style="font-weight: 700;">{{ o.quantity }}</td>
+                      <td>₹{{ "{:,.2f}".format(o.price) }}</td>
+                      <td style="font-weight: 700;">₹{{ "{:,.2f}".format(o.total) }}</td>
+                      <td>
+                        <span class="badge badge-positive" style="border: 1px solid var(--color-positive);">
+                          {{ o.status }}
+                        </span>
+                      </td>
+                      <td style="color: var(--text-muted); font-size: 0.82rem;">{{ o.created_at }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div style="text-align: center; padding: 40px 16px; color: var(--text-muted);">
+              <p>No orders executed yet.</p>
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- Transactions Section -->
+        <div class="card" id="transactions">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="font-size: 1.15rem; font-weight: 700;">Cash Transactions Ledger</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">{{ transactions | length }} Entries</span>
+          </div>
+
+          {% if transactions %}
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Type</th>
+                    <th>Stock</th>
+                    <th>Quantity</th>
+                    <th>Execution Price</th>
+                    <th>Total Amount</th>
+                    <th>Post-Trade Cash</th>
+                    <th>Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for t in transactions %}
+                    <tr>
+                      <td style="color: var(--text-muted); font-size: 0.82rem;">#{{ t.id }}</td>
+                      <td>
+                        <span class="badge {{ 'badge-buy' if t.type == 'BUY' else 'badge-sell' }}">
+                          {{ t.type }}
+                        </span>
+                      </td>
+                      <td style="font-weight: 700;">{{ t.symbol }}</td>
+                      <td>{{ t.quantity }}</td>
+                      <td>₹{{ "{:,.2f}".format(t.price) }}</td>
+                      <td style="font-weight: 700;">₹{{ "{:,.2f}".format(t.amount) }}</td>
+                      <td style="color: var(--accent-lime); font-weight: 700;">₹{{ "{:,.2f}".format(t.cash_balance) }}</td>
+                      <td style="color: var(--text-muted); font-size: 0.82rem;">{{ t.timestamp }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div style="text-align: center; padding: 40px 16px; color: var(--text-muted);">
+              <p>No transaction history recorded yet.</p>
+            </div>
+          {% endif %}
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
